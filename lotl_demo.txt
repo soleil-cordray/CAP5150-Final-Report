@@ -1,0 +1,300 @@
+@echo off
+REM ================================================================================
+REM LIVING-OFF-THE-LAND (LOTL) ATTACK DEMO  – SAFE STUDY VERSION (TEXT ONLY)
+REM FILE NAME: lotl_attack_demo.txt
+REM PURPOSE: Educational overview of LOTL techniques for static analysis practice.
+REM MECHANISM: Describe how native Windows tools *could* be abused, using comments
+REM            and pseudocode only. No runnable commands are included.
+REM ANALYSIS: Static reading only. DO NOT CONVERT TO .BAT OR EXECUTE.
+REM ================================================================================
+
+
+REM ================================================================================
+REM GLOBAL VARIABLES (CONCEPTUAL)
+REM ================================================================================
+REM Example C2 protocol and domain (fake for demo)
+REM   C2_PROTOCOL = "http"
+REM   C2_DOMAIN   = "malicious-server.example.com"
+
+REM Example local payload path (where a real LOTL script might drop a binary)
+REM   MALWARE_NAME  = "payload.exe"
+REM   MALWARE_PATH  = "%TEMP%\%MALWARE_NAME%"
+
+REM Example fake “legit-sounding” task/service name
+REM   FAKE_SERVICE_NAME = "WindowsUpdateCheck"
+
+
+
+REM ================================================================================
+REM STAGE 1: DISABLE WINDOWS DEFENDER (EVADE DEFENSES)
+REM ================================================================================
+REM PURPOSE: In a real attack, the actor might try to reduce AV/EDR protection.
+REM TYPICAL LOTL MECHANISM:
+REM   - Abuse PowerShell to call Windows Defender management cmdlets.
+REM   - Request that real-time monitoring be disabled.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   powershell.exe:
+REM       call Defender API / cmdlet to turn off real-time protection
+REM       (e.g., "Set-MpPreference -DisableRealtimeMonitoring $true")
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - Look for "powershell.exe" plus Defender-related strings or cmdlets.
+REM   - Look for arguments mentioning "DisableRealtimeMonitoring" or "MpPreference".
+
+
+
+REM ================================================================================
+REM STAGE 2: DOWNLOAD PAYLOAD (INGRESS TOOL TRANSFER)
+REM ================================================================================
+REM PURPOSE: Get the main malware file from attacker-controlled infrastructure.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use built-in Windows downloaders (e.g., certutil, BITS, PowerShell WebClient)
+REM     instead of custom HTTP clients.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   PAYLOAD_URL = C2_PROTOCOL + "://" + C2_DOMAIN + "/payload"
+REM   Use a native tool (certutil / bitsadmin / PowerShell WebClient) to:
+REM       - request PAYLOAD_URL
+REM       - save response to MALWARE_PATH
+REM       - overwrite any existing file
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - Command-line references to "certutil", "bitsadmin", or WebClient types.
+REM   - Strings containing "\\Temp\\" + suspicious executable names.
+REM   - URLs under attacker-like domains.
+
+
+
+REM ================================================================================
+REM STAGE 3: EXECUTE PAYLOAD (SIGNED BINARY PROXY / SCRIPTING)
+REM ================================================================================
+REM PURPOSE: Run the downloaded malware using trusted binaries (LOLBins).
+REM TYPICAL LOTL MECHANISM:
+REM   - Use "mshta.exe" or similar signed binaries to execute script code.
+REM   - Script then calls PowerShell to run the payload.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   Build a PowerShell command:
+REM       PS_WEBCLIENT   = "new object: .Net WebClient"
+REM       PS_DOWNLOAD    = "download second-stage script from C2"
+REM       PS_EXECUTE     = "invoke downloaded script"
+REM   Combine into one hidden PowerShell invocation string.
+REM
+REM   Use mshta.exe (or another proxy):
+REM       - create script that launches PowerShell with PS_EXECUTE
+REM       - run script in a hidden / background context
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - Look for "mshta.exe", "wscript", "cscript", or "rundll32" launching PowerShell.
+REM   - Long, concatenated PowerShell command strings.
+REM   - Evidence of script engines being used as a bridge to PowerShell.
+
+
+
+REM ================================================================================
+REM STAGE 4: PERSISTENCE (SCHEDULED TASK)
+REM ================================================================================
+REM PURPOSE: Ensure malware runs automatically every login / boot.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use "schtasks.exe" (Windows Task Scheduler CLI) to create autorun tasks.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   TASK_TRIGGER = "ONLOGON"        (run on each user logon)
+REM   TASK_PRIV    = "HIGHEST"        (request highest privileges)
+REM   TASK_ACTION  = "execute MALWARE_PATH"
+REM
+REM   Use schtasks.exe to:
+REM       - /Create a new task
+REM       - assign FAKE_SERVICE_NAME as the task name
+REM       - configure TASK_TRIGGER, TASK_ACTION, TASK_PRIV
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - Command strings referencing "schtasks.exe /Create".
+REM   - Task names imitating Windows components ("WindowsUpdateCheck", etc.).
+REM   - Tasks that target binaries under %TEMP% or user-writable paths.
+
+
+
+REM ================================================================================
+REM STAGE 5: CREDENTIAL ACCESS (LSASS MEMORY DUMP)
+REM ================================================================================
+REM PURPOSE: Steal Windows authentication material for offline cracking.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use signed Windows binaries (e.g., rundll32 with comsvcs.dll, or other tools)
+REM     to dump the LSASS process memory.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   LSASS_DUMP = "%TEMP%\\lsass.dmp"
+REM   Use a trusted DLL runner (e.g., rundll32) with a legitimate DLL export to:
+REM       - locate LSASS process
+REM       - create a memory dump at LSASS_DUMP
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - References to "lsass", "MiniDump", or lsass.dmp-like filenames.
+REM   - Suspicious rundll32 command lines using uncommon DLL exports.
+REM   - Access patterns to LSASS process handles in logs.
+
+
+
+REM ================================================================================
+REM STAGE 6: REGISTRY MANIPULATION (FIREWALL / SERVICES)
+REM ================================================================================
+REM PURPOSE: Modify system configuration to allow malware to communicate or hide.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use "reg.exe" (Windows Registry CLI) to:
+REM       * add firewall exceptions
+REM       * configure autostart locations
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   REG_ROOT     = "HKLM\\System\\CurrentControlSet\\Services"
+REM   REG_FIREWALL = "SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy"
+REM   REG_APPS     = "AuthorizedApplications\\List"
+REM
+REM   REG_PATH = REG_ROOT + "\\" + REG_FIREWALL + "\\" + REG_APPS
+REM
+REM   Use reg.exe to:
+REM       - add a value under REG_PATH
+REM       - point it at MALWARE_PATH
+REM       - mark it as "Enabled:Windows Update" or similar
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - "reg add" or "reg.exe" command lines creating new firewall rules.
+REM   - Keys under FirewallPolicy\AuthorizedApplications\List with odd values.
+REM   - Registry writes referencing %TEMP% or unexpected executables.
+
+
+
+REM ================================================================================
+REM STAGE 7: DATA THEFT (BITS ABUSE)
+REM ================================================================================
+REM PURPOSE: Exfiltrate stolen data using background transfer services.
+REM TYPICAL LOTL MECHANISM:
+REM   - Compress victim files into an archive.
+REM   - Use "bitsadmin.exe" or BITS PowerShell cmdlets for stealthy upload.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   EXFIL_URL    = C2_PROTOCOL + "://" + C2_DOMAIN + "/upload"
+REM   STOLEN_DATA  = "%USERPROFILE%\\Documents\\sensitive_data.zip"
+REM
+REM   Use bitsadmin to:
+REM       - /create transfer job "exfiltration"
+REM       - /addfile STOLEN_DATA -> EXFIL_URL
+REM       - /resume the job to send data
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - "bitsadmin.exe" references in strings or process trees.
+REM   - Jobs pointing to external domains not used by the organization.
+REM   - Archives created in user folders shortly before BITS transfers.
+
+
+
+REM ================================================================================
+REM STAGE 8: COVER TRACKS (CLEAR WINDOWS EVENT LOGS)
+REM ================================================================================
+REM PURPOSE: Destroy forensic evidence of the attack.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use "wevtutil.exe" (Windows Event Log utility) to clear logs.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   Use wevtutil.exe to:
+REM       - clear Security log   (login attempts & access events)
+REM       - clear System log     (system errors, service starts/stops)
+REM       - clear Application log (program events)
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - "wevtutil cl" or similar patterns.
+REM   - Sudden complete log wipe events followed by reboot or shutdown.
+REM   - Correlated with prior malicious activity timelines.
+
+
+
+REM ================================================================================
+REM STAGE 9: ALTERNATIVE EXECUTION (SQUIBLYDOO / REGSVR32)
+REM ================================================================================
+REM PURPOSE: Provide a backup method for remote code execution if other stages fail.
+REM TYPICAL LOTL MECHANISM:
+REM   - Use "regsvr32.exe" with a crafted scriptlet (SCT) over HTTP(S).
+REM   - This can bypass certain whitelisting controls because regsvr32 is trusted.
+REM
+REM MALICIOUS CODE (PSEUDOCODE):
+REM   SQUIBLYDOO_URL = C2_PROTOCOL + "://" + C2_DOMAIN + "/payload.sct"
+REM
+REM   Use regsvr32.exe to:
+REM       - load remote scriptlet from SQUIBLYDOO_URL
+REM       - execute scriptlet code without saving it to disk in a normal way
+REM
+REM FORENSIC / GHIDRA HINTS:
+REM   - regsvr32.exe command lines referencing remote .sct or HTTP/HTTPS URLs.
+REM   - Scriptlet URLs not associated with legitimate software.
+
+
+
+REM ================================================================================
+REM END OF LOTL DEMO – SUMMARY FOR ANALYSTS
+REM ================================================================================
+REM GHIDRA ANALYSIS POINTS (WHAT TO HUNT FOR IN STATIC ANALYSIS):
+REM   - Command-line argument strings for native tools:
+REM       * powershell.exe, certutil.exe, bitsadmin.exe, mshta.exe, reg.exe,
+REM         rundll32.exe, schtasks.exe, wevtutil.exe, regsvr32.exe, etc.
+REM   - Creation or modification of:
+REM       * Registry run keys, firewall rules, scheduled tasks.
+REM       * Files in %TEMP% or user profile paths used as payloads or dumps.
+REM   - URL strings and domain names that look like C2 infrastructure.
+REM   - Suspicious references to "lsass", "MiniDump", ".dmp", or exfil archives.
+
+
+
+REM ================================================================================
+REM MITRE ATT&CK TECHNIQUES (MAPPED CONCEPTUALLY)
+REM ================================================================================
+REM [T1562.001] Impair Defenses: Disable or Modify Tools
+REM   - PURPOSE: Mimic malware disabling Windows Defender real-time monitoring.
+REM   - MECHANISM: PowerShell Defender configuration cmdlets.
+
+REM [T1105] Ingress Tool Transfer
+REM   - PURPOSE: Download payload from external C2 server.
+REM   - MECHANISM: Native download tools (certutil, BITS, WebClient).
+
+REM [T1218.005] Signed Binary Proxy Execution: Mshta
+REM   - PURPOSE: Execute malicious scripts via trusted Windows binary.
+REM   - MECHANISM: mshta.exe running HTML/JS/VBScript that launches PowerShell.
+
+REM [T1053.005] Scheduled Task/Job: Scheduled Task
+REM   - PURPOSE: Achieve persistence via Windows Task Scheduler.
+REM   - MECHANISM: schtasks.exe creating autorun tasks.
+
+REM [T1003.001] OS Credential Dumping: LSASS Memory
+REM   - PURPOSE: Extract password material from LSASS for offline cracking.
+REM   - MECHANISM: Trusted binaries dumping LSASS memory.
+
+REM [T1562.004] Impair Defenses: Disable or Modify System Firewall
+REM   - PURPOSE: Create firewall exceptions for malware traffic.
+REM   - MECHANISM: reg.exe modifying firewall-related registry keys.
+
+REM [T1048.003] Exfiltration Over Alternative Protocol
+REM   - PURPOSE: Upload stolen data over BITS-managed HTTP(S) transfers.
+REM   - MECHANISM: bitsadmin.exe or BITS APIs.
+
+REM [T1070.001] Indicator Removal on Host: Clear Windows Event Logs
+REM   - PURPOSE: Delete forensic evidence of attack.
+REM   - MECHANISM: wevtutil.exe clearing log channels.
+
+REM [T1218.010] Signed Binary Proxy Execution: Regsvr32
+REM   - PURPOSE: Execute remote scriptlet code using DLL registration tool.
+REM   - MECHANISM: regsvr32.exe loading remote SCT (Squiblydoo pattern).
+
+REM REFERENCE:
+REM   - MITRE Corporation. (2023). MITRE ATT&CK Matrix.
+REM   - https://attack.mitre.org/techniques/
+REM ================================================================================
+
+
+REM Global variable cleanup (conceptual – no real variables in this .txt)
+REM   C2_DOMAIN      = ""
+REM   MALWARE_NAME   = ""
+REM   MALWARE_PATH   = ""
+REM   FAKE_SERVICE_NAME = ""
+REM ================================================================================
+
+REM END OF SAFE LOTL STUDY FILE
