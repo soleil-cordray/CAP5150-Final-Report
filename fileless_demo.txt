@@ -1,7 +1,7 @@
 # =============================================================================
 # FILELESS MALWARE LOADER DEMO – SAFE PSEUDOCODE VERSION
 # =============================================================================
-# FILE NAME: fileless_loader_demo_safe.txt
+# FILE NAME: fileless_demo_safe.txt
 # PURPOSE: Educational walk-through of fileless malware techniques.
 # MECHANISM: Describe how malware could operate *without actually running it*.
 # ANALYSIS: Static, non-executable pseudocode ONLY. DO NOT IMPLEMENT VERBATIM.
