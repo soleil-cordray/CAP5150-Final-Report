@@ -1,7 +1,7 @@
 @echo off
 REM ================================================================================
 REM LIVING-OFF-THE-LAND (LOTL) ATTACK DEMO  – SAFE STUDY VERSION (TEXT ONLY)
-REM FILE NAME: lotl_attack_demo.txt
+REM FILE NAME: lotl_demo_safe.txt
 REM PURPOSE: Educational overview of LOTL techniques for static analysis practice.
 REM MECHANISM: Describe how native Windows tools *could* be abused, using comments
 REM            and pseudocode only. No runnable commands are included.
